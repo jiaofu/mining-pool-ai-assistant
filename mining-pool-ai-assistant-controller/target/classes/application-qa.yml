@@ -1,0 +1,82 @@
+#开发环境
+management:
+  endpoints:
+    web:
+      exposure:
+        # dev环境需要暴露的端点
+        include: health,info,metrics,prometheus,env,beans
+
+server:
+  port: 8080
+spring:
+  application:
+    name: binance-mining-ai-assistant
+  datasource:
+#    driver-class-name: com.mysql.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    idle-timeout: 600000
+    maximum-pool-size: 10
+    max-lifetime: 1800000
+    minimum-idle: 5
+  redis:
+    # Redis数据库索引（默认为0）,如果设置为1，那么存入的key-value都存放在select 1中
+    database: 0
+    lettuce:
+      shutdown-timeout: 60000
+      pool:
+        #连接池最大连接数（使用负值表示没有限制）
+        max-active: 80
+        # 连接池最大阻塞等待时间（使用负值表示没有限制）
+        max-wait: 30000
+        # 连接池中的最大空闲连接
+        max-idle: 80
+        # 连接池中的最小空闲连接
+        min-idle: 50
+
+#mybatis驼峰字段映射
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+
+#swagger:
+#  enable: true
+springdoc:
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    root: info
+    com:
+      company: debug
+  path: ./logs
+pool:
+  #  allow-origin: https://oprate.bnbpool.site,http://oprate.bnbpool.site
+  allow-origin: "*"
+  security:
+    name:
+      #矿池业务库
+      db1:
+        # securityName
+        - bp-qa-tk-aws-pool-db-pw
+        # securityRegion
+        - ap-northeast-1
+      #矿池业务库读库
+      dbRead:
+        # securityName
+        - bp-qa-tk-aws-pool-db-pw
+        # securityRegion
+        - ap-northeast-1
+      #redis配置
+      redis:
+        - bp-qa-tk-aws-webapi-redis-key
+        - ap-northeast-1
+      #dbsecre配置
+      dbSecretkey:
+        - bp-qa-tk-dbrecordcheck-key
+        - ap-northeast-1
+
+  # 是否是线上的请求 0是测试 1是线上
+  online: 0
+  cancelAlgoId:

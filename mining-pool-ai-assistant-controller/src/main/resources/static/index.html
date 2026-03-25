@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>矿池 AI 智能运维助手</title>
+<!-- marked v9（稳定版，正确支持 GFM 表格）-->
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+     background:#f0f2f5;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+.hd{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:13px 22px;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);flex-shrink:0}
+.hd-l{display:flex;align-items:center;gap:11px}
+.hd-logo{font-size:24px}
+.hd-t{font-size:17px;font-weight:700}
+.hd-s{font-size:11px;color:#94a3b8;margin-top:2px}
+.hd-r{display:flex;gap:8px}
+.btn{padding:6px 13px;border:1px solid rgba(255,255,255,.2);border-radius:8px;cursor:pointer;
+     font-size:13px;background:rgba(255,255,255,.08);color:#e2e8f0;transition:.18s}
+.btn:hover{background:rgba(255,255,255,.18)}
+
+/* ── Chat ── */
+.chat{flex:1;overflow-y:auto;padding:20px 14px;max-width:860px;width:100%;margin:0 auto}
+.msg{display:flex;gap:10px;margin-bottom:16px;animation:in .2s ease}
+@keyframes in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.av{width:33px;height:33px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:15px;flex-shrink:0;margin-top:2px}
+.msg-u .av{background:#334155}
+.msg-a .av{background:#f0b90b}
+.bbl{max-width:83%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.7;word-break:break-word}
+.msg-u .bbl{background:#1e293b;color:#f1f5f9;border-bottom-left-radius:4px}
+.msg-a .bbl{background:#fff;color:#1e293b;border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+/* ── Streaming ── */
+.s-txt{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.7;margin:0;color:#374151}
+.cur{display:inline-block;width:2px;height:1em;background:#f0b90b;vertical-align:text-bottom;
+     margin-left:1px;animation:blink .8s step-start infinite}
+@keyframes blink{50%{opacity:0}}
+.dots{display:flex;gap:5px;padding:6px 2px}
+.dots span{width:7px;height:7px;background:#94a3b8;border-radius:50%;animation:dot 1.3s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+
+/* ── Markdown styles ── */
+.md table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}
+.md th,.md td{border:1px solid #e2e8f0;padding:7px 11px;text-align:left}
+.md th{background:#f8fafc;font-weight:600;color:#374151}
+.md tr:nth-child(even) td{background:#fafbfc}
+.md code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12.5px;
+          color:#c0392b;font-family:Consolas,monospace}
+.md pre{background:#1e293b;color:#e2e8f0;padding:12px 14px;border-radius:8px;
+        overflow-x:auto;margin:8px 0;font-family:Consolas,monospace;font-size:13px;line-height:1.5}
+.md pre code{background:none;padding:0;color:inherit;font-size:inherit}
+.md h1{font-size:17px;margin:14px 0 6px;color:#1e293b;border-bottom:2px solid #f0b90b;padding-bottom:5px}
+.md h2{font-size:15px;margin:12px 0 5px;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:4px}
+.md h3{font-size:14.5px;margin:10px 0 5px;color:#1e293b;font-weight:700}
+.md h4{font-size:14px;margin:8px 0 4px;font-weight:700}
+.md ul,.md ol{padding-left:20px;margin:6px 0}
+.md li{margin:3px 0}
+.md strong{color:#dc2626;font-weight:700}
+.md em{color:#7c3aed}
+.md blockquote{border-left:3px solid #f0b90b;padding:7px 12px;margin:8px 0;
+               background:#fffbeb;border-radius:0 6px 6px 0;color:#92400e}
+.md p{margin:5px 0}
+.md hr{border:none;border-top:1px solid #e2e8f0;margin:10px 0}
+.md a{color:#2563eb;text-decoration:underline}
+
+/* ── 引导追问：含问号的 li 变成可点击按钮 ── */
+.md li.followup {
+    list-style: none;
+    margin: 4px 0;
+    padding: 7px 12px 7px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    cursor: pointer;
+    color: #2563eb;
+    font-size: 13px;
+    display: inline-block;
+    transition: all .18s;
+    background: #f8fafc;
+}
+.md li.followup::before { content: '💬 '; }
+.md li.followup:hover {
+    background: #fffbeb;
+    border-color: #f0b90b;
+    color: #1e293b;
+    transform: translateX(3px);
+}
+.md ul.followup-list {
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+}
+
+/* ── Quick actions ── */
+.qa{display:flex;flex-wrap:wrap;gap:8px;padding:6px 14px 12px;max-width:860px;width:100%;margin:0 auto}
+.qb{padding:7px 13px;border:1px solid #e2e8f0;border-radius:18px;background:#fff;
+    color:#475569;cursor:pointer;font-size:13px;transition:.18s;white-space:nowrap}
+.qb:hover{border-color:#f0b90b;background:#fffbeb;color:#1e293b}
+
+/* ── Welcome ── */
+.wc{text-align:center;padding:55px 20px;color:#64748b}
+.wc-ico{font-size:52px;margin-bottom:13px}
+.wc h2{font-size:21px;color:#1e293b;margin-bottom:8px;font-weight:700}
+.wc p{font-size:14px;line-height:1.8}
+
+/* ── Input ── */
+.ia{background:#fff;border-top:1px solid #e9ecef;padding:13px 14px;flex-shrink:0}
+.ir{max-width:860px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+#mi{flex:1;padding:10px 14px;border:2px solid #e2e8f0;border-radius:12px;font-size:14px;
+    resize:none;min-height:44px;max-height:120px;outline:none;transition:.18s;
+    font-family:inherit;line-height:1.5}
+#mi:focus{border-color:#f0b90b}
+.sb{width:44px;height:44px;border:none;border-radius:12px;background:#f0b90b;color:#1e293b;
+    cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;
+    transition:.18s;flex-shrink:0}
+.sb:hover:not(:disabled){background:#d4a30a;transform:scale(1.05)}
+.sb:disabled{background:#e2e8f0;cursor:not-allowed;color:#94a3b8}
+.chat::-webkit-scrollbar{width:5px}
+.chat::-webkit-scrollbar-track{background:transparent}
+.chat::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div class="hd-l">
+    <span class="hd-logo">⛏️</span>
+    <div>
+      <div class="hd-t">矿池 AI 智能运维助手</div>
+      <div class="hd-s">Binance Pool · AI Operations Assistant</div>
+    </div>
+  </div>
+  <div class="hd-r">
+    <button class="btn" onclick="newConv()">🔄 新建对话</button>
+    <button class="btn" onclick="clearConv()">🗑️ 清除记忆</button>
+  </div>
+</div>
+
+<div class="chat" id="chat">
+  <div class="wc" id="wc">
+    <div class="wc-ico">🤖</div>
+    <h2>欢迎使用矿池 AI 助手</h2>
+    <p>我可以帮你查询矿池数据、分析异常、给出运维建议<br>试试下面的快捷提问，或直接输入你的问题</p>
+  </div>
+</div>
+
+<div class="qa" id="qa">
+  <button class="qb" onclick="ask('昨天BTC出账正常吗？')">📋 昨天BTC出账</button>
+  <button class="qb" onclick="ask('矿池今天算力怎么样？')">📊 矿池今天算力</button>
+  <button class="qb" onclick="ask('BTC现在每T能挖多少？')">💰 BTC每T收益</button>
+  <button class="qb" onclick="ask('最近3天批量检查一下账单')">🔍 批量检查账单</button>
+  <button class="qb" onclick="ask('查一下所有币种当前价格')">💱 全部币种价格</button>
+</div>
+
+<div class="ia">
+  <div class="ir">
+    <textarea id="mi" rows="1"
+      placeholder="输入问题，如：昨天BTC出账正常吗？查一下 user_abc 的算力..."
+      onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+    <button class="sb" id="sb" onclick="send()">➤</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+//  marked 配置（v9 API）
+// ════════════════════════════════════════════
+(function initMarked() {
+    if (typeof marked === 'undefined') return;
+    marked.use({ breaks: true, gfm: true, tables: true });
+})();
+
+// ════════════════════════════════════════════
+//  工具函数
+// ════════════════════════════════════════════
+function esc(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMd(text) {
+    if (typeof marked !== 'undefined') {
+        try { return marked.parse(text); } catch(e) {}
+    }
+    // 内联备用解析器
+    return fallbackMd(text);
+}
+
+// ════════════════════════════════════════════
+//  备用 Markdown 解析器（无 CDN 时兜底）
+// ════════════════════════════════════════════
+function fallbackMd(raw) {
+    if (!raw) return '';
+    const blocks = [];
+    // 提取代码块
+    let src = raw.replace(/```([\w]*)\r?\n([\s\S]*?)```/g, function(_, lang, code) {
+        const n = blocks.length;
+        blocks.push('<pre><code>' + esc(code.trimEnd()) + '</code></pre>');
+        return '\x00CB' + n + '\x00';
+    });
+
+    const lines = src.split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+        const raw_l = lines[i];
+        const l = raw_l.trim();
+        if (!l) { i++; continue; }
+        if (l.startsWith('\x00CB')) { out.push(l); i++; continue; }
+        // 标题
+        const hm = l.match(/^(#{1,6})\s+(.*)/);
+        if (hm) {
+            out.push('<h' + hm[1].length + '>' + il(hm[2]) + '</h' + hm[1].length + '>');
+            i++; continue;
+        }
+        // 分隔线
+        if (/^[-*_]{3,}$/.test(l)) { out.push('<hr>'); i++; continue; }
+        // 引用
+        if (l.startsWith('>')) {
+            const bq = [];
+            while (i < lines.length && lines[i].trim().startsWith('>')) {
+                bq.push(lines[i].trim().replace(/^>\s?/, '')); i++;
+            }
+            out.push('<blockquote>' + bq.map(il).join('<br>') + '</blockquote>');
+            continue;
+        }
+        // 表格
+        if (l.includes('|')) {
+            const sep = i + 1 < lines.length ? lines[i + 1].trim() : '';
+            if (sep && /^[\s|:\-]+$/.test(sep) && sep.includes('-')) {
+                const pr = row => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+                const heads = pr(l);
+                i += 2;
+                const rows = [];
+                while (i < lines.length && lines[i].trim().includes('|')) {
+                    rows.push(pr(lines[i].trim())); i++;
+                }
+                let t = '<table><thead><tr>' + heads.map(h => '<th>' + il(h) + '</th>').join('') + '</tr></thead>';
+                if (rows.length) {
+                    t += '<tbody>' + rows.map(r =>
+                        '<tr>' + r.map(c => '<td>' + il(c) + '</td>').join('') + '</tr>'
+                    ).join('') + '</tbody>';
+                }
+                out.push(t + '</table>');
+                continue;
+            }
+        }
+        // 无序列表
+        if (/^[-*+]\s/.test(l)) {
+            const items = [];
+            while (i < lines.length && /^[-*+]\s/.test(lines[i].trim())) {
+                items.push('<li>' + il(lines[i].trim().replace(/^[-*+]\s/, '')) + '</li>'); i++;
+            }
+            out.push('<ul>' + items.join('') + '</ul>'); continue;
+        }
+        // 有序列表
+        if (/^\d+[.)]\s/.test(l)) {
+            const items = [];
+            while (i < lines.length && /^\d+[.)]\s/.test(lines[i].trim())) {
+                items.push('<li>' + il(lines[i].trim().replace(/^\d+[.)]\s/, '')) + '</li>'); i++;
+            }
+            out.push('<ol>' + items.join('') + '</ol>'); continue;
+        }
+        // 段落
+        const ps = [];
+        while (i < lines.length) {
+            const ll = lines[i].trim();
+            if (!ll) break;
+            if (/^#{1,6}\s/.test(ll) || /^[-*_]{3,}$/.test(ll) || ll.startsWith('>') ||
+                /^[-*+]\s/.test(ll) || /^\d+[.)]\s/.test(ll) || ll.startsWith('\x00CB')) break;
+            const nxt = (i + 1 < lines.length) ? lines[i + 1].trim() : '';
+            if (ll.includes('|') && /^[\s|:\-]+$/.test(nxt) && nxt.includes('-')) break;
+            ps.push(ll); i++;
+        }
+        if (ps.length) out.push('<p>' + ps.map(il).join('<br>') + '</p>');
+    }
+    let html = out.join('\n');
+    html = html.replace(/\x00CB(\d+)\x00/g, (_, n) => blocks[+n]);
+    return html;
+}
+
+function il(s) { // inline markdown
+    s = esc(s);
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^\n*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return s;
+}
+
+// ════════════════════════════════════════════
+//  SSE 解析器（正确处理换行 + TCP 分包）
+//
+//  根本原因：LLM 发出 "\n" 时，Spring SSE 编码为
+//  "data:\n\n"，即空 data 事件。旧代码 if(data) 会
+//  把空字符串跳过，导致所有换行丢失，Markdown 变乱码。
+//
+//  修复：用"事件完整性"方式解析——找到完整 \n\n 边界
+//  再处理，保证 data 为空时正确还原为 "\n"。
+// ════════════════════════════════════════════
+function createSseParser(onData) {
+    let buf = '';
+    return function(chunk) {
+        // 统一换行符
+        buf += chunk.replace(/\r\n/g, '\n');
+        let end;
+        // 每次找到完整的 SSE 事件（以 \n\n 结尾）就处理一个
+        while ((end = buf.indexOf('\n\n')) !== -1) {
+            const eventText = buf.slice(0, end);
+            buf = buf.slice(end + 2);
+
+            // 从事件文本中提取所有 data: 行
+            const dataLines = [];
+            for (const line of eventText.split('\n')) {
+                if (line.startsWith('data:')) {
+                    dataLines.push(line.slice(5)); // 保留原始内容（含空字符串）
+                }
+            }
+            if (dataLines.length === 0) continue;
+
+            // SSE 规范：多个 data: 行用 \n 拼接还原原始内容
+            const data = dataLines.join('\n');
+            if (data === '[DONE]') continue;
+
+            // ✅ 关键：data 为空字符串 = LLM 发出了换行 "\n"
+            onData(data === '' ? '\n' : data);
+        }
+    };
+}
+
+// ════════════════════════════════════════════
+//  状态
+// ════════════════════════════════════════════
+let convId    = uid();
+let streaming = false;
+
+function uid() { return 'c' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+// ════════════════════════════════════════════
+//  对话管理
+// ════════════════════════════════════════════
+function newConv() {
+    convId = uid();
+    document.getElementById('chat').innerHTML =
+        '<div class="wc" id="wc"><div class="wc-ico">🤖</div>' +
+        '<h2>欢迎使用矿池 AI 助手</h2>' +
+        '<p>我可以帮你查询矿池数据、分析异常、给出运维建议<br>' +
+        '试试下面的快捷提问，或直接输入你的问题</p></div>';
+    document.getElementById('qa').style.display = 'flex';
+}
+
+async function clearConv() {
+    try { await fetch('/api/ai/chat/clear?conversationId=' + convId, { method: 'POST' }); } catch(e) {}
+    newConv();
+}
+
+// ════════════════════════════════════════════
+//  输入框
+// ════════════════════════════════════════════
+function ask(q) { document.getElementById('mi').value = q; send(); }
+function onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
+function resize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+
+// ════════════════════════════════════════════
+//  DOM 工具
+// ════════════════════════════════════════════
+function sc() { const c = document.getElementById('chat'); c.scrollTop = c.scrollHeight; }
+
+function appendUser(txt) {
+    const w = document.getElementById('wc'); if (w) w.remove();
+    document.getElementById('qa').style.display = 'none';
+    const c = document.getElementById('chat');
+    const m = document.createElement('div');
+    m.className = 'msg msg-u';
+    m.innerHTML = '<div class="av">👤</div><div class="bbl">' + esc(txt) + '</div>';
+    c.appendChild(m); sc();
+}
+
+function appendAi() {
+    const w = document.getElementById('wc'); if (w) w.remove();
+    const c = document.getElementById('chat');
+    const m = document.createElement('div');
+    m.className = 'msg msg-a'; m.id = 'ai-msg';
+    m.innerHTML =
+        '<div class="av">🤖</div>' +
+        '<div class="bbl" id="ai-bbl">' +
+        '<div class="dots"><span></span><span></span><span></span></div>' +
+        '</div>';
+    c.appendChild(m); sc();
+}
+
+function updateStream(text) {
+    const el = document.getElementById('ai-bbl');
+    if (!el) return;
+    // 流式过程：显示原始文本 + 闪烁光标
+    el.innerHTML = '<pre class="s-txt">' + esc(text) + '</pre><span class="cur"></span>';
+    sc();
+}
+
+function finalize(fullText) {
+    // 移除 id，防止后续误操作
+    const msg = document.getElementById('ai-msg');
+    if (msg) msg.removeAttribute('id');
+    const el = document.getElementById('ai-bbl');
+    if (!el) return;
+    el.removeAttribute('id');
+    // 渲染完整 Markdown
+    el.className = 'bbl md';
+    el.innerHTML = renderMd(fullText);
+    makeClickable(el);
+    sc();
+}
+
+// ════════════════════════════════════════════
+//  引导追问：扫描含 ？ 的 li，变成可点击按钮
+// ════════════════════════════════════════════
+function makeClickable(el) {
+    // 找到最后一个 ul 里含问号的 li（通常是引导追问区域）
+    const uls = el.querySelectorAll('ul');
+    uls.forEach(ul => {
+        let hasQ = false;
+        ul.querySelectorAll('li').forEach(li => {
+            const text = li.textContent.trim();
+            if (text.includes('？') || text.includes('?')) {
+                hasQ = true;
+                li.classList.add('followup');
+                li.title = '点击发送此问题';
+                li.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    // 提取纯文本（去掉 emoji 前缀等）
+                    let q = text
+                        .replace(/^[-*+\s]+/, '')        // 去列表符号
+                        .replace(/^[^\u4e00-\u9fa5a-zA-Z0-9（(]+/, '') // 去前缀符号
+                        .trim();
+                    if (q) ask(q);
+                });
+            }
+        });
+        if (hasQ) ul.classList.add('followup-list');
+    });
+}
+
+// ════════════════════════════════════════════
+//  发送
+// ════════════════════════════════════════════
+async function send() {
+    const input = document.getElementById('mi');
+    const msg   = input.value.trim();
+    if (!msg || streaming) return;
+
+    appendUser(msg);
+    input.value = ''; input.style.height = 'auto';
+    appendAi();
+    streaming = true;
+    document.getElementById('sb').disabled = true;
+
+    let full = '';
+    const sseParser = createSseParser(function(data) {
+        full += data;
+        updateStream(full);
+    });
+
+    try {
+        const resp = await fetch('/api/ai/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversationId: convId, message: msg })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+
+        const reader  = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            sseParser(decoder.decode(value, { stream: true }));
+        }
+    } catch(e) {
+        console.error('Stream error:', e);
+        if (!full) full = '⚠️ 请求失败：' + e.message;
+    }
+
+    finalize(full);
+    streaming = false;
+    document.getElementById('sb').disabled = false;
+    document.getElementById('mi').focus();
+}
+</script>
+</body>
+</html>

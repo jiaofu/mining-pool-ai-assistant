@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+╔══════════════════════════════════════════════════════════════════════╗
+║  矿池 AI 助手 — Logback 生产级配置                                    ║
+║                                                                      ║
+║  设计要点：                                                           ║
+║  1. 异步写入（AsyncAppender）— 日志 IO 不占用业务线程                  ║
+║  2. 专用 JSON Provider — 正确转义，不因 message 含引号破坏 JSON        ║
+║  3. callerData Provider — 精准输出 method + line，不用脆弱的 %M/%L    ║
+║  4. ShortenedThrowableConverter — 裁剪堆栈噪音，保留关键调用链         ║
+║  5. ShutdownHook — 进程退出时优雅刷新异步队列，不丢末尾日志             ║
+║  6. immediateFlush=false — 文件 IO 批量刷盘，吞吐量更高               ║
+║  7. 按 profile 差异化 — dev/test 彩色控制台，prod 纯文件               ║
+║  8. 框架降噪 — 第三方包设 WARN，业务包保持 INFO                        ║
+╚══════════════════════════════════════════════════════════════════════╝
+-->
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+
+    <!-- ──────────────────────────────────────────────────────────
+         JVM 关闭时优雅刷新异步队列（最多等待 5s）
+         ────────────────────────────────────────────────────────── -->
+    <shutdownHook class="ch.qos.logback.core.hook.DefaultShutdownHook">
+        <delay>5000</delay>
+    </shutdownHook>
+
+    <!-- ──────────────────────────────────────────────────────────
+         从 Spring Environment 注入属性
+         ────────────────────────────────────────────────────────── -->
+    <springProperty scope="context" name="APP_NAME"       source="spring.application.name" defaultValue="mining-pool-ai-assistant"/>
+    <springProperty scope="context" name="LOG_HOME"       source="logging.path"             defaultValue="./logs"/>
+    <springProperty scope="context" name="LOG_ROOT_LEVEL" source="logging.level.root"       defaultValue="INFO"/>
+
+    <!-- 自定义 IP 转换器 -->
+    <conversionRule conversionWord="ip" converterClass="com.binance.pool.util.LogIpConfig"/>
+
+    <!-- ──────────────────────────────────────────────────────────
+         控制台输出格式（彩色，dev/test 环境使用）
+         样例：
+           2026-03-25 13:22:05.123  INFO  [  http-nio-8080-exec-1] c.b.pool.ctrl.AiChatController  chatStream:29  AI Chat stream, convId=xxx
+         ────────────────────────────────────────────────────────── -->
+    <property name="CONSOLE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS}  %highlight(%-5level) [%18.18thread] %cyan(%-46.46logger{45}) %magenta(%-30.30(%method:%line)) %msg%n"/>
+
+    <!-- ──────────────────────────────────────────────────────────
+         APPENDER ① 控制台（同步，仅 dev/test）
+         ────────────────────────────────────────────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <charset>UTF-8</charset>
+            <pattern>${CONSOLE_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────────────────
+         APPENDER ② INFO + WARN 文件（滚动 + GZ 压缩归档）
+         · 过滤掉 ERROR（ERROR 单独写，便于告警订阅）
+         · immediateFlush=false：批量刷盘，性能提升 ~5x
+         ────────────────────────────────────────────────────────── -->
+    <appender name="FILE_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/${APP_NAME}-info.json</file>
+        <immediateFlush>false</immediateFlush>
+
+        <!-- 拒绝 ERROR，其余 >= INFO 通过 -->
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>DENY</onMatch>
+            <onMismatch>NEUTRAL</onMismatch>
+        </filter>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+
+        <!--
+            ✅ 使用专用 Provider，而非字符串拼接 JSON
+               - <message>       正确 JSON 转义，message 含引号也不会破坏结构
+               - <callerData>    从 LoggingEvent 取 method/line，准确可靠
+               - <stackTrace>    裁剪堆栈，过滤 JDK 反射 / CGLIB 等无用行
+               - <pattern>       补充业务自定义字段（ip、app、trace_id）
+        -->
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+
+                <!-- 时间戳（UTC，与 ELK 统一） -->
+                <timestamp>
+                    <fieldName>timestamp</fieldName>
+                    <timeZone>UTC</timeZone>
+                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</pattern>
+                </timestamp>
+
+                <!-- 日志级别 -->
+                <logLevel>
+                    <fieldName>level</fieldName>
+                </logLevel>
+
+                <!-- 线程名 -->
+                <threadName>
+                    <fieldName>thread</fieldName>
+                </threadName>
+
+                <!-- 类名（缩短包路径，节省存储） -->
+                <loggerName>
+                    <fieldName>class</fieldName>
+                    <shortenedLoggerNameLength>45</shortenedLoggerNameLength>
+                </loggerName>
+
+                <!-- ✅ 方法名 + 行号（由 AsyncAppender.includeCallerData=true 保障） -->
+                <callerData>
+                    <methodFieldName>method</methodFieldName>
+                    <lineFieldName>line</lineFieldName>
+                </callerData>
+
+                <!-- MDC（分布式链路 TraceId 等） -->
+                <mdc/>
+
+                <!-- ✅ 日志正文（自动 JSON 转义，不会因 " 破坏结构） -->
+                <message>
+                    <fieldName>message</fieldName>
+                </message>
+
+                <!-- ✅ 异常堆栈（裁剪后，保留业务调用链） -->
+                <stackTrace>
+                    <fieldName>exception</fieldName>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <!-- 每个 cause 最多展示 20 行 -->
+                        <maxDepthPerCause>20</maxDepthPerCause>
+                        <!-- 包名缩短，节省空间 -->
+                        <shortenedClassNameLength>40</shortenedClassNameLength>
+                        <!-- 过滤无用的框架调用行 -->
+                        <exclude>sun\.reflect\..*</exclude>
+                        <exclude>java\.lang\.reflect\..*</exclude>
+                        <exclude>org\.springframework\.cglib\..*</exclude>
+                        <exclude>org\.springframework\.aop\..*</exclude>
+                        <exclude>com\.sun\.proxy\..*</exclude>
+                    </throwableConverter>
+                </stackTrace>
+
+                <!-- 业务自定义字段：ip / app / trace_id -->
+                <pattern>
+                    <omitEmptyFields>true</omitEmptyFields>
+                    <pattern>
+                        {
+                            "ip":       "%ip",
+                            "app":      "${APP_NAME}",
+                            "trace_id": "%X{X-B3-TraceId:-}",
+                            "span_id":  "%X{X-B3-SpanId:-}"
+                        }
+                    </pattern>
+                </pattern>
+
+            </providers>
+        </encoder>
+
+        <!-- 按天 + 文件大小双维度滚动，历史文件 GZ 压缩 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/history/${APP_NAME}-info.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+            <cleanHistoryOnStart>false</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────────────────
+         APPENDER ③ ERROR 文件（只收 ERROR，保留 90 天用于问题回溯）
+         ────────────────────────────────────────────────────────── -->
+    <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/${APP_NAME}-error.json</file>
+        <immediateFlush>false</immediateFlush>
+
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <fieldName>timestamp</fieldName>
+                    <timeZone>UTC</timeZone>
+                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</pattern>
+                </timestamp>
+                <logLevel>
+                    <fieldName>level</fieldName>
+                </logLevel>
+                <threadName>
+                    <fieldName>thread</fieldName>
+                </threadName>
+                <loggerName>
+                    <fieldName>class</fieldName>
+                    <shortenedLoggerNameLength>45</shortenedLoggerNameLength>
+                </loggerName>
+                <!-- ERROR 保留完整 method + line，便于精准定位 -->
+                <callerData>
+                    <methodFieldName>method</methodFieldName>
+                    <lineFieldName>line</lineFieldName>
+                </callerData>
+                <mdc/>
+                <message>
+                    <fieldName>message</fieldName>
+                </message>
+                <!-- ERROR 堆栈展示更多，方便排查根因 -->
+                <stackTrace>
+                    <fieldName>exception</fieldName>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <maxDepthPerCause>30</maxDepthPerCause>
+                        <shortenedClassNameLength>40</shortenedClassNameLength>
+                        <exclude>sun\.reflect\..*</exclude>
+                        <exclude>java\.lang\.reflect\..*</exclude>
+                        <exclude>org\.springframework\.cglib\..*</exclude>
+                        <exclude>com\.sun\.proxy\..*</exclude>
+                    </throwableConverter>
+                </stackTrace>
+                <pattern>
+                    <omitEmptyFields>true</omitEmptyFields>
+                    <pattern>
+                        {
+                            "ip":       "%ip",
+                            "app":      "${APP_NAME}",
+                            "trace_id": "%X{X-B3-TraceId:-}",
+                            "span_id":  "%X{X-B3-SpanId:-}"
+                        }
+                    </pattern>
+                </pattern>
+            </providers>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/history/${APP_NAME}-error.%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+            <cleanHistoryOnStart>false</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────────────────
+         APPENDER ④ 异步包装（AsyncAppender）
+         关键参数说明：
+           queueSize            — 内存队列容量（条）
+           discardingThreshold  — 0=队列满时也不丢弃任何级别的日志
+           includeCallerData    — true=保留 method/line（callerData 必须）
+           neverBlock           — INFO: true=积压时直接跳过不阻塞业务线程
+                                  ERROR: false=宁可等待也不丢 ERROR
+           maxFlushTime         — ShutdownHook 触发后最多等待多少 ms 刷完队列
+         ────────────────────────────────────────────────────────── -->
+    <appender name="ASYNC_INFO" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>true</includeCallerData>
+        <neverBlock>true</neverBlock>
+        <maxFlushTime>3000</maxFlushTime>
+        <appender-ref ref="FILE_INFO"/>
+    </appender>
+
+    <appender name="ASYNC_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>true</includeCallerData>
+        <neverBlock>false</neverBlock>
+        <maxFlushTime>5000</maxFlushTime>
+        <appender-ref ref="FILE_ERROR"/>
+    </appender>
+
+    <!-- ──────────────────────────────────────────────────────────
+         框架降噪（第三方包设为 WARN，减少无用日志量）
+         ────────────────────────────────────────────────────────── -->
+
+    <!-- Spring 框架内部 -->
+    <logger name="org.springframework"                   level="WARN"/>
+    <logger name="org.springframework.web.servlet"       level="WARN"/>
+    <logger name="org.springframework.boot.web"          level="WARN"/>
+    <logger name="org.springframework.context"           level="WARN"/>
+
+    <!-- Spring AI：INFO，便于观察 Tool 调用 / LLM 交互过程 -->
+    <logger name="org.springframework.ai"                level="INFO"/>
+
+    <!-- Reactor / Netty（WebFlux 底层） -->
+    <logger name="reactor"                               level="WARN"/>
+    <logger name="io.netty"                              level="WARN"/>
+    <logger name="reactor.netty"                         level="WARN"/>
+
+    <!-- 连接池 -->
+    <logger name="com.zaxxer.hikari"                     level="WARN"/>
+
+    <!-- MyBatis Mapper — 如需调试 SQL，临时改为 DEBUG 即可 -->
+    <logger name="com.binance.pool.dao.mapper"           level="WARN"/>
+    <logger name="com.binance.pool.base.mapper"          level="WARN"/>
+    <logger name="tk.mybatis"                            level="WARN"/>
+
+    <!-- 其他第三方库 -->
+    <logger name="org.apache"                            level="WARN"/>
+    <logger name="com.alibaba"                           level="WARN"/>
+    <logger name="software.amazon"                       level="WARN"/>
+    <logger name="io.micrometer"                         level="WARN"/>
+
+    <!-- 业务代码：INFO -->
+    <logger name="com.binance.pool"                      level="INFO"/>
+
+    <!-- ──────────────────────────────────────────────────────────
+         Root Logger — 按 Spring Profile 差异化
+           dev / test : 控制台（彩色）+ 异步文件
+           prod       : 仅异步文件（容器平台收集 stdout）
+         ────────────────────────────────────────────────────────── -->
+    <springProfile name="dev,test">
+        <root level="${LOG_ROOT_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="ASYNC_INFO"/>
+            <appender-ref ref="ASYNC_ERROR"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="ASYNC_INFO"/>
+            <appender-ref ref="ASYNC_ERROR"/>
+        </root>
+    </springProfile>
+
+    <!-- 兜底：未匹配任何 profile（如直接 java -jar 未指定 profile） -->
+    <springProfile name="!dev &amp; !test &amp; !prod">
+        <root level="${LOG_ROOT_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="ASYNC_INFO"/>
+            <appender-ref ref="ASYNC_ERROR"/>
+        </root>
+    </springProfile>
+
+</configuration>

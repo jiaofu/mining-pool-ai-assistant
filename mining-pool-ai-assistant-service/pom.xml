@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.binance.pool.ai.assistant</groupId>
+        <artifactId>mining-pool-ai-assistant</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>mining-pool-ai-assistant-service</artifactId>
+    <groupId>com.binance.pool.ai.assistant</groupId>
+
+    <dependencies>
+        <dependency>
+            <artifactId>mining-pool-ai-assistant-dao</artifactId>
+            <groupId>com.binance.pool.ai.assistant</groupId>
+        </dependency>
+        <dependency>
+            <groupId>com.binance.pool</groupId>
+            <artifactId>mining-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+        </dependency>
+
+        <!-- Spring AI Core (for @Tool annotation in service layer) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-core</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

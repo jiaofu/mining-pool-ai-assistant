@@ -1,0 +1,13 @@
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+.DS_Store
+.idea
+*.iml
+*/target
+logs/
+data/
+LOG_HOME_IS_UNDEFINED/
+/mining-pool--xxl-job-scheduler/src/main/resources/application-test.yml
+/controller/src/main/resources/application-test.yml
+/mining-pool-xxl-job-scheduler/src/main/resources/application-test.yml

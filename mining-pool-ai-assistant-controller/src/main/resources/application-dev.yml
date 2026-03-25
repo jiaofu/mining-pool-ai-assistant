@@ -1,0 +1,80 @@
+# 测试环境配置
+management:
+  endpoints:
+    web:
+      exposure:
+        # dev环境需要暴露的端点
+        include: health,info,metrics,prometheus,env,beans
+
+spring:
+  application:
+    name: binance-mining-ai-assistant
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    idle-timeout: 600000
+    maximum-pool-size: 100
+    max-lifetime: 1800000
+    minimum-idle: 5
+  redis:
+    lettuce:
+      shutdown-timeout: 60000
+      pool:
+        max-active: 80
+        max-wait: 30000
+        max-idle: 80
+        min-idle: 50
+  # Spring AI - dev环境配置 (LiteLLM 代理)
+  ai:
+    openai:
+      api-key: sk-xinGbgtE2Y98DDa2RTOsXg
+      base-url: https://litellm.devfdg.net/v1
+      chat:
+        options:
+          model: bedrock-claude-4-sonnet
+          temperature: 0.3
+
+server:
+  port: 8084
+
+#mybatis驼峰字段映射
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    root: info
+    com:
+      company: debug
+    org.springframework.ai: debug
+  path: ./logs
+pool:
+  security:
+    name:
+      #矿池业务库
+      db1:
+        # securityName
+        - mp-beta-tk-aws-pool-db-pw
+        # securityRegion
+        - ap-northeast-1
+      #矿池业务库读库
+      dbRead:
+        # securityName
+        - mp-beta-tk-aws-pool-db-pw
+        # securityRegion
+        - ap-northeast-1
+      #redis配置
+      redis:
+        - bp-beta-tk-aws-webapi-redis-key
+        - ap-northeast-1
+      #dbsecre配置
+      dbSecretkey:
+        - bp-beta-tk-dbrecordcheck-key
+        - ap-northeast-1
+  # 是否是线上的请求 0 是测试
+  online: 0
+  cancelAlgoId:

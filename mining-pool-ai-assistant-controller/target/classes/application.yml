@@ -1,0 +1,64 @@
+spring:
+  profiles:
+    active: test
+  # 开启静态资源映射（Spring Boot 3 正确路径）
+  web:
+    resources:
+      add-mappings: true
+  # Spring AI OpenAI Configuration (通过 LiteLLM 代理)
+  ai:
+    openai:
+      api-key: sk-xinGbgtE2Y98DDa2RTOsXg
+      base-url: https://litellm.devfdg.net
+      chat:
+        options:
+          model: bedrock-claude-4-sonnet
+          temperature: 0.3
+          max-tokens: 4096
+
+server:
+  tomcat:
+    mbeanregistry:
+      enabled: true
+
+springdoc:
+  api-docs:
+    path: /v2/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    default-model-expand-depth: 20
+    default-models-expand-depth: 20
+  show-actuator: true
+
+management:
+  server:
+    port: 9091
+  endpoints:
+    web:
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      group:
+        custom:
+          include: db,redis
+    metrics:
+      enabled: true
+      export:
+        prometheus:
+          enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+info:
+  app:
+    name: ${spring.application.name}
+    version: 1.0.0
+    description: 矿池AI智能运维助手
+  java:
+    version: ${java.version}
+  spring:
+    version: ${spring.boot.version}

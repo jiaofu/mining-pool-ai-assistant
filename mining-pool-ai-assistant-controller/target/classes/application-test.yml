@@ -55,7 +55,7 @@ spring:
           temperature: 0.3
 
 server:
-  port: 8081
+  port: 8080
 
 #mybatis驼峰字段映射
 mybatis:

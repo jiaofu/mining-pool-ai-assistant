@@ -1,7 +1,6 @@
 package com.binance.pool.config;
 
 import com.binance.pool.interceptor.ApiInterceptorImpl;
-import com.binance.pool.interceptor.UserIdInterceptorImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,10 +17,6 @@ public class SpringMvcConfig implements WebMvcConfigurer {
     public ApiInterceptorImpl loginInterceptor() {
         return new ApiInterceptorImpl();
     }
-    @Bean
-    public UserIdInterceptorImpl userIdInterceptor() {
-        return new UserIdInterceptorImpl();
-    }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -36,13 +31,7 @@ public class SpringMvcConfig implements WebMvcConfigurer {
         ir.excludePathPatterns("/api/ai/**");
         ir.excludePathPatterns("/static/**");
 
-        // 还可以在这里注册其它的拦截器
-        registry.addInterceptor(userIdInterceptor())
-                .addPathPatterns("/**")
-                .excludePathPatterns("/**.html")
-                .excludePathPatterns("/**.*")
-                .excludePathPatterns("/api/ai/**")
-                .excludePathPatterns("/static/**");
+
     }
 
     @Override
